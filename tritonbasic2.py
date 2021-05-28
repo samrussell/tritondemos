@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from triton     import TritonContext, ARCH, Instruction, MemoryAccess, OPCODE, MODE, AST_REPRESENTATION
+from triton     import TritonContext, ARCH, Instruction, MemoryAccess, OPCODE, MODE, AST_REPRESENTATION, AST_NODE
 from pprint import pprint
 
 # Memory mapping
@@ -22,6 +22,21 @@ def emulate(Triton, pc):
         # Process
         Triton.processing(instruction)
         count += 1
+
+        # Handle nested memory reads
+        if instruction.isMemoryRead():
+            read_register, read_ast_node = instruction.getReadRegisters()[0]
+            written_register, write_ast_node = instruction.getWrittenRegisters()[0]
+            if read_ast_node.getType() == AST_NODE.REFERENCE:
+                expression = read_ast_node.getSymbolicExpression()
+                import pdb
+                pdb.set_trace()
+                variable = expression.getAst().getSymbolicVariable()
+                alias = variable.getAlias()
+                newalias = "(%s)[0]" % alias
+                Triton.symbolizeRegister(written_register, newalias)
+
+
 
         print("Emulating %s" % (instruction))
 
@@ -51,20 +66,19 @@ def run():
     Triton.setAstRepresentationMode(AST_REPRESENTATION.PYTHON)
     
     entrypoint = 0x401000
-    program = b"\x55\x89\xE5\x8B\x45\x08\x8B\x4D\x0C\x31\xD2\xF7\xF1\x8B\x4D\x10\x01\xC8\x01\xD0\x5D\x83\xC4\x08\xC3"
+    program = b"\x8B\x04\x24\x8B\x10\x8B\x02\x8B\x00\xC3"
 
     Triton.setConcreteMemoryAreaValue(entrypoint, program)
 
     # Define a fake stack
-    #Triton.setConcreteRegisterValue(Triton.registers.ebp, BASE_EBP)
     #Triton.setConcreteRegisterValue(Triton.registers.esp, BASE_ESP)
-    Triton.symbolizeRegister(Triton.registers.ebp, "ebp")
     Triton.symbolizeRegister(Triton.registers.esp, "esp")
 
     # Symbolize our arguments
-    Triton.symbolizeMemory(MemoryAccess(BASE_ESP+0x04, 4), "arg_04")
-    Triton.symbolizeMemory(MemoryAccess(BASE_ESP+0x08, 4), "arg_08")
-    Triton.symbolizeMemory(MemoryAccess(BASE_ESP+0x0C, 4), "arg_0C")
+    # Triton.symbolizeMemory(MemoryAccess(BASE_ESP+0x00, 4), "arg_00")
+    # Triton.symbolizeMemory(MemoryAccess(BASE_ESP+0x04, 4), "arg_04")
+    # Triton.symbolizeMemory(MemoryAccess(BASE_ESP+0x08, 4), "arg_08")
+    # Triton.symbolizeMemory(MemoryAccess(BASE_ESP+0x0C, 4), "arg_0C")
     
     # enable symbolic execution
     Triton.enableSymbolicEngine(True)
