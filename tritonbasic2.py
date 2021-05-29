@@ -25,18 +25,29 @@ def emulate(Triton, pc):
 
         # Handle nested memory reads
         if instruction.isMemoryRead():
-            read_register, read_ast_node = instruction.getReadRegisters()[0]
-            written_register, write_ast_node = instruction.getWrittenRegisters()[0]
-            if read_ast_node.getType() == AST_NODE.REFERENCE:
-                expression = read_ast_node.getSymbolicExpression()
-                import pdb
-                pdb.set_trace()
-                variable = expression.getAst().getSymbolicVariable()
-                alias = variable.getAlias()
-                newalias = "(%s)[0]" % alias
-                Triton.symbolizeRegister(written_register, newalias)
-
-
+            memory_access, read__memory_ast_node = instruction.getLoadAccess()[0]
+            read_register, read_register_ast_node = instruction.getReadRegisters()[0]
+            written_register, write_register_ast_node = instruction.getWrittenRegisters()[0]
+            if read_register.getName() != "unknown":
+                expression = read_register_ast_node.getSymbolicExpression()
+                expression_ast = expression.getAst()
+                #import pdb
+                #pdb.set_trace()
+                if expression_ast.getType() == AST_NODE.VARIABLE:
+                    variable = expression_ast.getSymbolicVariable()
+                    alias = variable.getAlias()
+                    displacement = memory_access.getDisplacement().getValue()
+                    newalias = "(%s)[0x%x]" % (alias, displacement)
+                    #newalias = "(%s)[0]" % alias
+                    Triton.symbolizeRegister(written_register, newalias)
+                elif expression_ast.getType() == AST_NODE.CONCAT:
+                    import pdb
+                    pdb.set_trace()
+                    pass
+                else:
+                    import pdb
+                    pdb.set_trace()
+                    raise Exception("Unexpected ast node")
 
         print("Emulating %s" % (instruction))
 
@@ -66,7 +77,7 @@ def run():
     Triton.setAstRepresentationMode(AST_REPRESENTATION.PYTHON)
     
     entrypoint = 0x401000
-    program = b"\x8B\x04\x24\x8B\x10\x8B\x02\x8B\x00\xC3"
+    program = b"\x8B\x04\x24\x8B\x10\x8B\x42\x08\x8B\x00\x8B\x58\x04\x8B\x48\xFC\xC3"
 
     Triton.setConcreteMemoryAreaValue(entrypoint, program)
 
@@ -97,6 +108,12 @@ if __name__ == '__main__':
 
     print("Final state of eax:")
     print(Triton.getAstContext().unroll(Triton.getRegisterAst(Triton.registers.eax)))
+
+    print("Final state of ebx:")
+    print(Triton.getAstContext().unroll(Triton.getRegisterAst(Triton.registers.ebx)))
+
+    print("Final state of ecx:")
+    print(Triton.getAstContext().unroll(Triton.getRegisterAst(Triton.registers.ecx)))
 
     print("Final state of ebp:")
     print(Triton.getAstContext().unroll(Triton.getRegisterAst(Triton.registers.ebp)))
